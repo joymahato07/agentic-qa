@@ -1,0 +1,6 @@
+@AgenticQA_HostAddress = http://localhost:5160
+
+GET {{AgenticQA_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
