@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using AgenticQA.Services;
+using AgenticQA.Models;
 
 namespace AgenticQA.Controllers
 {
@@ -15,16 +16,10 @@ namespace AgenticQA.Controllers
         }
 
         [HttpPost("analyze")]
-        public async Task<IActionResult> Analyze([FromBody] QaRequest req)
+        public async Task<IActionResult> Analyze(QaRequest req)
         {
             var result = await _qaService.Analyze(req.Query, req.Answer);
             return Ok(result);
         }
-    }
-
-    public class QaRequest
-    {
-        public string Query { get; set; }
-        public string Answer { get; set; }
     }
 }

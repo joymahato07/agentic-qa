@@ -4,86 +4,91 @@ namespace AgenticQA.Services
 {
     public class QaService
     {
-        private readonly GroqService _groq;
+        private readonly GroqService _groqService;
 
-        public QaService(GroqService groq)
+        public QaService(GroqService groqService)
         {
-            _groq = groq;
+            _groqService = groqService;
         }
 
         public async Task<object> Analyze(string query, string answer)
         {
             var prompt = $@"
-You are an AI QA agent.
+You are a multi-agent QA evaluation system.
 
-Analyze the answer based on the question.
+There are 4 agents:
+1. Coverage Agent
+2. Risk Agent
+3. Improvement Agent
+4. Scoring Agent
 
-Question: {query}
-Answer: {answer}
+Each agent must analyze the answer independently.
 
-IMPORTANT:
-- Return ONLY valid JSON
-- Do NOT include explanations
-- Do NOT include comments like // or extra text
-- Ensure JSON is strictly valid
+Query:
+{query}
 
-Format:
+Answer:
+{answer}
+
+Return ONLY valid JSON in this format:
+
 {{
-  ""coverage"": ""..."",
-  ""risks"": [""..."", ""...""],
-  ""improvedAnswer"": ""..."",
-  ""score"": "".../10""
+  ""agentFlow"": [
+    {{
+      ""agent"": ""Coverage Agent"",
+      ""decision"": ""<coverage percentage like 30%>"",
+      ""reason"": ""<why this coverage score was given>""
+    }},
+    {{
+      ""agent"": ""Risk Agent"",
+      ""decision"": [""<risk1>"", ""<risk2>""],
+      ""reason"": ""<why these risks were identified>""
+    }},
+    {{
+      ""agent"": ""Improvement Agent"",
+      ""decision"": ""<improved answer>"",
+      ""reason"": ""<why this is better>""
+    }},
+    {{
+      ""agent"": ""Scoring Agent"",
+      ""decision"": ""<score out of 10>"",
+      ""reason"": ""<why this score>""
+    }}
+  ]
 }}
+
+Ensure the JSON is strictly valid. Do not add any text outside JSON.
 ";
 
-            var response = await _groq.CallGroq(prompt);
+            var result = await _groqService.CallGroq(prompt);
 
             try
             {
-                var cleaned = response.Trim();
+                using var doc = JsonDocument.Parse(result);
 
-                // Fix common JSON issues
-                cleaned = cleaned.Replace("\r", "").Replace("\n", "");
-
-                if (!cleaned.StartsWith("{"))
+                if (!doc.RootElement.TryGetProperty("agentFlow", out var flow))
                 {
-                    var startIndex = cleaned.IndexOf("{");
-                    if (startIndex >= 0)
-                        cleaned = cleaned.Substring(startIndex);
+                    return new
+                    {
+                        error = "Invalid AI response format",
+                        rawOutput = result
+                    };
                 }
 
-                if (!cleaned.EndsWith("}"))
-                {
-                    cleaned += "}";
-                }
-
-                var parsed = JsonSerializer.Deserialize<object>(cleaned);
+                // 🔥 IMPORTANT FIX: Convert before returning (avoid disposed JsonDocument issue)
+                var flowJson = JsonSerializer.Deserialize<object>(flow.GetRawText());
 
                 return new
                 {
-                    agentFlow = new[]
-                    {
-                        "Coverage Agent",
-                        "Risk Agent",
-                        "Improvement Agent",
-                        "Scoring Agent"
-                    },
-                    output = parsed
+                    agentFlow = flowJson
                 };
             }
             catch
             {
                 return new
                 {
-                    agentFlow = new[]
-                    {
-                        "Coverage Agent",
-                        "Risk Agent",
-                        "Improvement Agent",
-                        "Scoring Agent"
-                    },
-                    rawOutput = response,
-                    warning = "AI response was not valid JSON"
+                    error = "Failed to parse AI response",
+                    rawOutput = result
                 };
             }
         }
