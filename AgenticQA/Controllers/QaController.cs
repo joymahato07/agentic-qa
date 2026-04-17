@@ -19,6 +19,15 @@ namespace AgenticQA.Controllers
         public async Task<IActionResult> Analyze(QaRequest req)
         {
             var result = await _qaService.Analyze(req.Query, req.Answer);
+
+            // Check if error exists
+            var errorProp = result?.GetType().GetProperty("error");
+
+            if (errorProp != null)
+            {
+                return StatusCode(502, result); // AI/external failure
+            }
+
             return Ok(result);
         }
     }
